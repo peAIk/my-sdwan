@@ -103,7 +103,6 @@ def main():
         writer.writerow(['WAN Edge Name', 'EdgeID', 'IOS Version', 'System IP'])
         writer.writerows(results)
    
-    
 if __name__ == "__main__":
     try:
         main()
