@@ -48,32 +48,15 @@ def get_wan_edges(header, url_prefix):
     wan_edges = [d for d in devices if d.get('device-type', '').lower() == 'vedge']
     return wan_edges
 
-def get_cert_validity(header, url_prefix, uuid):
-    url = f"{url_prefix}/certificate/vedge?uuid={uuid}"
-    response = requests.get(url, headers=header, verify=False)
-    response.raise_for_status()
-    cert_info = response.json()
-    # 'validityNotBefore' is usually the field for validity start date
-    return cert_info.get('validityNotBefore', '')
-
-def get_all_cert_validities(header, url_prefix):
-    url = f"{url_prefix}/certificate/vedge/list"
-    response = requests.get(url, headers=header, verify=False)
-    response.raise_for_status()
-    certs = response.json().get('data', [])
-    # Map serialNumber to validity dates
-    cert_map = {}
-    for cert in certs:
-        serial = cert.get('uuid') or cert.get('serialNumber')
-        validity_from = cert.get('validityNotBefore', '')
-        validity_to = cert.get('validityNotAfter', '')
-        cert_map[serial] = (validity_from, validity_to)
-    return cert_map
-
 def main():
     os.environ['NO_PROXY'] = 'cz.net.sys'
     # Define vManage information
-    vmanage_host = 'vman-atm.cz.net.sys'
+    
+    # ATM vManage
+    #vmanage_host = 'vman-atm.cz.net.sys'
+    # BRANCHES vManage
+    vmanage_host = 'vman.cz.net.sys'
+    
     vmanage_port = '443'  # Default HTTPS port
     #vmanage_username = input(f"{vmanage_host}\nUsername: ")
     #vmanage_password = getpass("Password: ")
@@ -102,28 +85,23 @@ def main():
     wan_edges = get_wan_edges(header, url_prefix)
     print(f"Found {len(wan_edges)} WAN edges.")
 
-    # Get all certificate validities
-    cert_map = get_all_cert_validities(header, url_prefix)
-
-    # Collect validity info serialNumber 
-    results = []
     for edge in wan_edges:
-        name = edge.get('host-name', edge.get('name', 'unknown'))
-        serial = edge.get642499642499
-        validity_from, _ = cert_map.get(serial, ('', ''))
-        print(f"WAN Edge: {name}, UUID: {serial}, Validity From: {validity_from}")
-        results.append([name, serial, validity_from])
-       # print("WAN Edge raw data:", edge)
+        print(f"WAN Edge Name: {edge.get('host-name')}, UUID: {edge.get('uuid')}, IOS Version: {edge.get('version')}, System IP: {edge.get('system-ip')}")
 
-    # Print all certificate serials in the map
-    for cert in cert_map:
-        print("Certificate serial in map:", cert)
 
     # Write to CSV
-#    with open('ATM-edges-validity-from.csv', 'w', newline='') as csvfile:
-#        writer = csv.writer(csvfile)
-#        writer.writerow(['WAN Edge Name', 'EdgeID', 'Validity From Date'])
-#        writer.writerows(results)
+    results = []
+    for e in wan_edges:
+        name = e.get('host-name') or ''
+        uuid = e.get('uuid') or e.get('deviceId') or ''
+        version = e.get('version') or e.get('softwareVersion') or e.get('runningVersion') or ''
+        system_ip = e.get('system-ip') or e.get('system_ip') or ''
+        results.append((name, uuid, version, system_ip))
+
+    with open('SDWAN-BRANCHES-EDGES.csv', 'w', newline='', encoding='utf-8') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(['WAN Edge Name', 'EdgeID', 'IOS Version', 'System IP'])
+        writer.writerows(results)
    
     
 if __name__ == "__main__":
