@@ -40,7 +40,7 @@ class Authentication:
             return None
 
 def get_config_group_devices(header):
-    url = "https://vman.cz.net.sys/dataservice/v1/config-group/CZBANK:SBLB+/device"
+    url = "https://vman.cz.net.sys/dataservice/template/config-group/devices?configGroupId=CZBANK:SBLB+"
     response = requests.get(url, headers=header, verify=False)
     response.raise_for_status()
     devices = response.json().get('data', [])
