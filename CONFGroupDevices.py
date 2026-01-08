@@ -94,12 +94,13 @@ def main():
     print("\n[INFO] Fetching Configuration Groups...")
     config_groups = get_all_config_groups(header)
     print(f"\nFound {len(config_groups)} Configuration Group(s):\n")
-    print(f"{'#':<5} {'Configuration Group ID':<50}")
-    print("-" * 55)
+    print(f"{'#':<5} {'Configuration Group ID':<50} {'Name':<30}")
+    print("-" * 85)
     
     for index, group in enumerate(config_groups, 1):
         group_id = group.get('id', 'N/A')
-        print(f"{index:<5} {group_id:<50}")
+        group_name = group.get('name', 'N/A')
+        print(f"{index:<5} {group_id:<50} {group_name:<30}")
     
     # Prompt user to select a group
     while True:
@@ -108,6 +109,7 @@ def main():
             if 1 <= selection <= len(config_groups):
                 selected_group = config_groups[selection - 1]
                 selected_group_id = selected_group.get('id')
+                selected_group_name = selected_group.get('name', 'N/A')
                 break
             else:
                 print(f"[ERROR] Please enter a number between 1 and {len(config_groups)}")
@@ -115,9 +117,9 @@ def main():
             print("[ERROR] Invalid input. Please enter a valid number.")
     
     # Get devices from selected Configuration Group
-    print(f"\n[INFO] Fetching devices from Configuration Group: {selected_group_id}")
+    print(f"\n[INFO] Fetching devices from Configuration Group: {selected_group_name} ({selected_group_id})")
     devices = get_config_group_devices(header, selected_group_id)
-    print(f"\nConfiguration Group Devices ({selected_group_id}):")
+    print(f"\nConfiguration Group Devices - {selected_group_name} ({selected_group_id}):")
     print(f"Found {len(devices)} device(s).\n")
     print(f"{'UUID':<40} {'Device Name':<30}")
     print("-" * 70)
