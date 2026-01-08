@@ -53,8 +53,11 @@ def get_config_group_devices(header, config_group_id):
     response = requests.get(url, headers=header, verify=False)
     response.raise_for_status()
     data = response.json()
-    # Handle both dict with 'data' key and direct list response
-    devices = data.get('data', []) if isinstance(data, dict) else data
+    # Handle response format with 'devices' key
+    if isinstance(data, dict):
+        devices = data.get('devices', [])
+    else:
+        devices = data
     return devices
 
 def main():
@@ -121,13 +124,14 @@ def main():
     devices = get_config_group_devices(header, selected_group_id)
     print(f"\nConfiguration Group Devices - {selected_group_name} ({selected_group_id}):")
     print(f"Found {len(devices)} device(s).\n")
-    print(f"{'UUID':<40} {'Device Name':<30}")
-    print("-" * 70)
+    print(f"{'Device ID':<35} {'Device Name':<30} {'Site Name':<20}")
+    print("-" * 85)
     
     for device in devices:
-        device_uuid = device.get('id', 'N/A')
+        device_id = device.get('id', 'N/A')
         device_name = device.get('host-name', 'N/A')
-        print(f"{device_uuid:<40} {device_name:<30}")
+        site_name = device.get('site-name', 'N/A')
+        print(f"{device_id:<35} {device_name:<30} {site_name:<20}")
 
 
 
