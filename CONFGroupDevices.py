@@ -39,8 +39,15 @@ class Authentication:
             print("Login failed!")
             return None
 
-def get_config_group_devices(header):
-    url = "https://vman.cz.net.sys/dataservice/template/config-group/devices?configGroupId=CZBANK:SBLB+"
+def get_all_config_groups(header):
+    url = "https://vman.cz.net.sys/dataservice/v1/config-group"
+    response = requests.get(url, headers=header, verify=False)
+    response.raise_for_status()
+    groups = response.json().get('data', [])
+    return groups
+
+def get_config_group_devices(header, config_group_id):
+    url = f"https://vman.cz.net.sys/dataservice/v1/config-group/{config_group_id}/device"
     response = requests.get(url, headers=header, verify=False)
     response.raise_for_status()
     devices = response.json().get('data', [])
@@ -79,9 +86,34 @@ def main():
     if token:
         print("[INFO] Login successful")
 
-    # Get Configuration Group devices
-    devices = get_config_group_devices(header)
-    print(f"\nConfiguration Group Devices (CZBANK:SBLB+):")
+    # Get all Configuration Groups
+    print("\n[INFO] Fetching Configuration Groups...")
+    config_groups = get_all_config_groups(header)
+    print(f"\nFound {len(config_groups)} Configuration Group(s):\n")
+    print(f"{'#':<5} {'Configuration Group ID':<50}")
+    print("-" * 55)
+    
+    for index, group in enumerate(config_groups, 1):
+        group_id = group.get('id', 'N/A')
+        print(f"{index:<5} {group_id:<50}")
+    
+    # Prompt user to select a group
+    while True:
+        try:
+            selection = int(input("\nEnter the number of the Configuration Group to view devices: "))
+            if 1 <= selection <= len(config_groups):
+                selected_group = config_groups[selection - 1]
+                selected_group_id = selected_group.get('id')
+                break
+            else:
+                print(f"[ERROR] Please enter a number between 1 and {len(config_groups)}")
+        except ValueError:
+            print("[ERROR] Invalid input. Please enter a valid number.")
+    
+    # Get devices from selected Configuration Group
+    print(f"\n[INFO] Fetching devices from Configuration Group: {selected_group_id}")
+    devices = get_config_group_devices(header, selected_group_id)
+    print(f"\nConfiguration Group Devices ({selected_group_id}):")
     print(f"Found {len(devices)} device(s).\n")
     print(f"{'UUID':<40} {'Device Name':<30}")
     print("-" * 70)
