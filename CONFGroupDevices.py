@@ -125,8 +125,8 @@ def main():
     print("-" * 70)
     
     for device in devices:
-        device_uuid = device.get('uuid', 'N/A')
-        device_name = device.get('hostname', 'N/A')
+        device_uuid = device.get('id', 'N/A')
+        device_name = device.get('host-name', 'N/A')
         print(f"{device_uuid:<40} {device_name:<30}")
 
 
