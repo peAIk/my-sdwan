@@ -43,14 +43,18 @@ def get_all_config_groups(header):
     url = "https://vman.cz.net.sys/dataservice/v1/config-group"
     response = requests.get(url, headers=header, verify=False)
     response.raise_for_status()
-    groups = response.json().get('data', [])
+    data = response.json()
+    # Handle both dict with 'data' key and direct list response
+    groups = data.get('data', []) if isinstance(data, dict) else data
     return groups
 
 def get_config_group_devices(header, config_group_id):
     url = f"https://vman.cz.net.sys/dataservice/v1/config-group/{config_group_id}/device"
     response = requests.get(url, headers=header, verify=False)
     response.raise_for_status()
-    devices = response.json().get('data', [])
+    data = response.json()
+    # Handle both dict with 'data' key and direct list response
+    devices = data.get('data', []) if isinstance(data, dict) else data
     return devices
 
 def main():
