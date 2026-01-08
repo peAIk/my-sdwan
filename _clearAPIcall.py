@@ -48,32 +48,15 @@ def get_wan_edges(header, url_prefix):
     wan_edges = [d for d in devices if d.get('device-type', '').lower() == 'vedge']
     return wan_edges
 
-def get_vedge_certificates(header, url_prefix):
-    """
-    GET /dataservice/certificate/vedges
-    Returns the list of vEdge certificates (prints result).
-    """
-    url = f"{url_prefix}/certificate/vedges/list"
-    response = requests.get(url, headers=header, verify=False)
-    response.raise_for_status()
-    data = response.json()
-    certs = data.get('data') if isinstance(data, dict) else data
-    if certs is None:
-        print("No certificates returned.")
-    else:
-        print(f"Found {len(certs)} vEdge certificates.")
-        print(json.dumps(certs, indent=2))
-    return certs
-
 def main():
     os.environ['NO_PROXY'] = 'cz.net.sys'
     # Define vManage information
         
     # ATM vManage
-    vmanage_host = 'vman-atm.cz.net.sys'
+    #vmanage_host = 'vman-atm.cz.net.sys'
     # BRANCHES vManage
-    #vmanage_host = 'vman.cz.net.sys'
-    print(f"Using vManage host: {vmanage_host}")
+    vmanage_host = 'vman.cz.net.sys'
+    print(f "Using vManage host: {vmanage_host}")
     vmanage_port = '443'  # Default HTTPS port
     #vmanage_username = input(f"{vmanage_host}\nUsername: ")
     #vmanage_password = getpass("Password: ")
@@ -102,12 +85,7 @@ def main():
     wan_edges = get_wan_edges(header, url_prefix)
     print(f"Found {len(wan_edges)} WAN edges.")
 
-    # Get vEdge certificates (new)
-    try:
-        vedge_certs = get_vedge_certificates(header, url_prefix)
-    except requests.HTTPError as e:
-        print(f"[ERROR] Failed to fetch vEdge certificates: {e}")
-        vedge_certs = None
+
 
 
 

@@ -39,40 +39,21 @@ class Authentication:
             print("Login failed!")
             return None
 
-def get_wan_edges(header, url_prefix):
-    url = f"{url_prefix}/device"
+def get_config_group_devices(header):
+    url = "https://vman.cz.net.sys/dataservice/v1/config-group/CZBANK:SBLB+/device/"
     response = requests.get(url, headers=header, verify=False)
     response.raise_for_status()
     devices = response.json().get('data', [])
-    # Filter for WAN Edge devices (typically 'vedge' type)
-    wan_edges = [d for d in devices if d.get('device-type', '').lower() == 'vedge']
-    return wan_edges
-
-def get_vedge_certificates(header, url_prefix):
-    """
-    GET /dataservice/certificate/vedges
-    Returns the list of vEdge certificates (prints result).
-    """
-    url = f"{url_prefix}/certificate/vedges/list"
-    response = requests.get(url, headers=header, verify=False)
-    response.raise_for_status()
-    data = response.json()
-    certs = data.get('data') if isinstance(data, dict) else data
-    if certs is None:
-        print("No certificates returned.")
-    else:
-        print(f"Found {len(certs)} vEdge certificates.")
-        print(json.dumps(certs, indent=2))
-    return certs
+    return devices
 
 def main():
     os.environ['NO_PROXY'] = 'cz.net.sys'
     # Define vManage information
         
     # ATM vManage
-    vmanage_host = 'vman-atm.cz.net.sys'
+    #vmanage_host = 'vman-atm.cz.net.sys'
     # BRANCHES vManage
-    #vmanage_host = 'vman.cz.net.sys'
+    vmanage_host = 'vman.cz.net.sys'
     print(f"Using vManage host: {vmanage_host}")
     vmanage_port = '443'  # Default HTTPS port
     #vmanage_username = input(f"{vmanage_host}\nUsername: ")
@@ -98,16 +79,19 @@ def main():
     if token:
         print("[INFO] Login successful")
 
-     # Get WAN edges
-    wan_edges = get_wan_edges(header, url_prefix)
-    print(f"Found {len(wan_edges)} WAN edges.")
+    # Get Configuration Group devices
+    devices = get_config_group_devices(header)
+    print(f"\nConfiguration Group Devices (CZBANK:SBLB+):")
+    print(f"Found {len(devices)} device(s).\n")
+    print(f"{'UUID':<40} {'Device Name':<30}")
+    print("-" * 70)
+    
+    for device in devices:
+        device_uuid = device.get('uuid', 'N/A')
+        device_name = device.get('hostname', 'N/A')
+        print(f"{device_uuid:<40} {device_name:<30}")
 
-    # Get vEdge certificates (new)
-    try:
-        vedge_certs = get_vedge_certificates(header, url_prefix)
-    except requests.HTTPError as e:
-        print(f"[ERROR] Failed to fetch vEdge certificates: {e}")
-        vedge_certs = None
+
 
 
 
