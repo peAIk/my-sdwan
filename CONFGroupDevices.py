@@ -49,7 +49,7 @@ def get_all_config_groups(header):
     return groups
 
 def get_config_group_devices(header, config_group_id):
-    url = f"https://vman.cz.net.sys/dataservice/v1/config-group/{config_group_id}/device"
+    url = f"https://vman.cz.net.sys/dataservice/v1/config-group/{config_group_id}/device/associate"
     response = requests.get(url, headers=header, verify=False)
     response.raise_for_status()
     data = response.json()
