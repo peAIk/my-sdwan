@@ -4,6 +4,7 @@ import os
 import csv
 from getpass import getpass
 import glob
+import time
 requests.packages.urllib3.disable_warnings()
 
 class Authentication:
@@ -63,25 +64,58 @@ def associate_devices_to_group(header, url_prefix, config_group_id, device_ids):
     response.raise_for_status()
     return response.json()
 
-def deploy_config_group(header, url_prefix, config_group_id, csv_path):
-    url = f"{url_prefix}/v1/config-group/{config_group_id}/device/deploy"
-    with open(csv_path, 'r') as f:
-        # Assuming the CSV has headers and is in the format vManage expects
-        csv_content = f.read()
-    
-    # This part of the API is tricky. You might need to adjust headers
-    # and payload format based on the exact API requirements for CSV uploads.
-    # The 'Content-Type' might need to be 'multipart/form-data'.
-    # This is a simplified example.
-    
-    # For now, we will assume the API accepts a JSON payload with the csvData
-    csv_payload = {
-        "csvData": csv_content
-    }
+def wait_for_task_completion(header, url_prefix, task_id, timeout=1200, poll_interval=10):
+    """Polls the status of a vManage task until it's complete."""
+    start_time = time.time()
+    url = f"{url_prefix}/device/action/status/{task_id}"
+    while (time.time() - start_time) < timeout:
+        response = requests.get(url, headers=header, verify=False)
+        response.raise_for_status()
+        task_data = response.json()
+        
+        status = task_data.get('summary', {}).get('status')
+        print(f"[INFO] Task '{task_id}': Status is '{status}'...")
 
-    response = requests.post(url, headers=header, json=csv_payload, verify=False)
+        if status == "Done":
+            print("[INFO] Task completed successfully.")
+            return True
+        elif status == "Error":
+            print("[ERROR] Task failed.")
+            # Optionally print more details about the error
+            for device in task_data.get('data', []):
+                if device.get('status') == 'failure':
+                    print(f"  - Device {device.get('host-name')}: {device.get('activity')}")
+            return False
+        
+        time.sleep(poll_interval)
+
+    print(f"[ERROR] Task timed out after {timeout} seconds.")
+    return False
+
+def deploy_config_group(header, url_prefix, config_group_id, device_uuids, csv_path):
+    """Deploys a config group with variables from a CSV file."""
+    url = f"{url_prefix}/v1/config-group/{config_group_id}/device/deploy"
+    
+    # The vManage API for CSV upload typically uses multipart/form-data
+    with open(csv_path, 'rb') as csv_file:
+        files = {
+            'file': (os.path.basename(csv_path), csv_file.read(), 'text/csv'),
+            'deviceUuids': (None, json.dumps(device_uuids), 'application/json')
+        }
+        
+        # We need a different header for multipart/form-data, without 'Content-Type'
+        deploy_header = header.copy()
+        del deploy_header['Content-Type']
+
+        response = requests.post(url, headers=deploy_header, files=files, verify=False)
+    
     response.raise_for_status()
-    return response.json()
+    task_id = response.json().get('id')
+    if not task_id:
+        raise Exception("Deployment task ID not found in response.")
+        
+    print(f"[INFO] Deployment initiated. Task ID: {task_id}")
+    return wait_for_task_completion(header, url_prefix, task_id)
 
 def main():
     os.environ['NO_PROXY'] = 'cz.net.sys'
@@ -100,7 +134,7 @@ def main():
         exit(f"[ERROR] Authentication failed: {e}")
 
     if token:
-        header = {'Content-Type': "application/json", 'Cookie': jsessionid, 'X-XSRF-TOKEN': token}
+        header = {'Cookie': jsessionid, 'X-XSRF-TOKEN': token}
         print("[INFO] Login successful")
     else:
         exit("[ERROR] Could not log in.")
@@ -121,6 +155,8 @@ def main():
     print(f"[INFO] Found {len(target_devices)} devices matching hostnames.")
     for dev in target_devices.values():
         print(f"  - {dev['host-name']} (UUID: {dev['uuid']})")
+    
+    target_device_uuids = list(target_devices.keys())
 
 
     # 3. Choose Configuration Group
@@ -191,13 +227,7 @@ def main():
     print(f"\n[INFO] Deploying group '{selected_group_name}' with variables from '{selected_csv}'...")
     
     try:
-        # Note: The deploy API with CSV can be complex.
-        # This is a placeholder for the actual deployment call.
-        # You may need to investigate the exact API endpoint and payload format for CSV upload.
-        print("[WARNING] The deploy_config_group function is a placeholder.")
-        print("[INFO] Please verify the deployment in vManage.")
-        # deploy_config_group(header, url_prefix, selected_group_id, selected_csv)
-        # print("[INFO] Deployment initiated successfully.")
+        deploy_config_group(header, url_prefix, selected_group_id, target_device_uuids, selected_csv)
     except Exception as e:
         print(f"[ERROR] Failed to deploy configuration group: {e}")
 
