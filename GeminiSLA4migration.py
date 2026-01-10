@@ -5,6 +5,7 @@ import csv
 from getpass import getpass
 import glob
 import time
+import pandas as pd
 requests.packages.urllib3.disable_warnings()
 
 class Authentication:
@@ -81,7 +82,6 @@ def wait_for_task_completion(header, url_prefix, task_id, timeout=1200, poll_int
             return True
         elif status == "Error":
             print("[ERROR] Task failed.")
-            # Optionally print more details about the error
             for device in task_data.get('data', []):
                 if device.get('status') == 'failure':
                     print(f"  - Device {device.get('host-name')}: {device.get('activity')}")
@@ -92,30 +92,96 @@ def wait_for_task_completion(header, url_prefix, task_id, timeout=1200, poll_int
     print(f"[ERROR] Task timed out after {timeout} seconds.")
     return False
 
-def deploy_config_group(header, url_prefix, config_group_id, device_uuids, csv_path):
-    """Deploys a config group with variables from a CSV file."""
-    url = f"{url_prefix}/v1/config-group/{config_group_id}/device/deploy"
+def deploy_config_group(header, url_prefix, config_group_id, target_devices, csv_path):
+    """Deploys a config group using a two-step process: upload variables, then deploy."""
     
-    with open(csv_path, 'r', encoding='utf-8') as f:
-        csv_content = f.read()
+    # == Step 1: Upload Device Variables ==
+    print("[INFO] Step 1: Uploading device variables...")
+    
+    # Get variable schema from the config group to filter variables from the CSV
+    try:
+        schema_url = f"{url_prefix}/v1/config-group/{config_group_id}/device/variables"
+        schema_response = requests.get(schema_url, headers=header, verify=False)
+        schema_response.raise_for_status()
+        schema_data = schema_response.json()
+        # Ensure there's at least one device in the schema response to get variables from
+        if not schema_data.get('devices'):
+             raise Exception("Could not retrieve variable schema. Is at least one device associated with the group?")
+        expected_vars = {var['name'] for var in schema_data['devices'][0]['variables']}
+        print(f"[INFO] Found {len(expected_vars)} expected variables in config group schema.")
+    except Exception as e:
+        raise Exception(f"Failed to get variable schema: {e}")
 
-    payload = {
-        "deviceUuids": device_uuids,
-        "csvData": csv_content
+    # Read the CSV and prepare the payload
+    try:
+        csv_df = pd.read_csv(csv_path)
+        # Assuming the CSV has a 'Host Name' column to map variables to devices
+        if 'Host Name' not in csv_df.columns:
+            raise Exception("CSV file must contain a 'Host Name' column.")
+    except Exception as e:
+        raise Exception(f"Failed to read or process CSV file: {e}")
+
+    devices_payload = []
+    for uuid, device_info in target_devices.items():
+        hostname = device_info['host-name']
+        device_vars_row = csv_df[csv_df['Host Name'] == hostname]
+        
+        if device_vars_row.empty:
+            print(f"[WARNING] No variables found in CSV for device '{hostname}'. Skipping variable upload for this device.")
+            continue
+            
+        variables = []
+        # Convert the row to a dictionary
+        device_vars_dict = device_vars_row.iloc[0].to_dict()
+        for key, value in device_vars_dict.items():
+            # Only add variables that are expected by the config group schema
+            if key in expected_vars:
+                variables.append({'name': key, 'value': value})
+        
+        devices_payload.append({
+            'device-id': uuid,
+            'variables': variables
+        })
+
+    if not devices_payload:
+        raise Exception("Could not construct variables payload. Check hostnames in CSV and script input.")
+
+    variables_payload = {
+        'solution': 'sdwan',
+        'devices': devices_payload
     }
+    
+    upload_header = header.copy()
+    upload_header['Content-Type'] = 'application/json'
+    upload_url = f"{url_prefix}/v1/config-group/{config_group_id}/device/variables"
+    
+    print("[INFO] Uploading variables payload...")
+    upload_response = requests.put(upload_url, headers=upload_header, data=json.dumps(variables_payload), verify=False)
+    upload_response.raise_for_status()
+    print("[INFO] Variable upload successful.")
 
+    # == Step 2: Trigger Deployment ==
+    print("\n[INFO] Step 2: Triggering deployment...")
+    deploy_url = f"{url_prefix}/v1/config-group/{config_group_id}/device/deploy"
+    
+    device_ids_for_deploy = list(target_devices.keys())
+    deploy_payload = {"devices": [{"id": uuid} for uuid in device_ids_for_deploy]}
+    
     deploy_header = header.copy()
     deploy_header['Content-Type'] = 'application/json'
 
-    response = requests.post(url, headers=deploy_header, data=json.dumps(payload), verify=False)
-    
-    response.raise_for_status()
-    task_id = response.json().get('id')
+    deploy_response = requests.post(deploy_url, headers=deploy_header, json=deploy_payload, verify=False)
+    deploy_response.raise_for_status()
+
+    task_id = deploy_response.json().get('id')
     if not task_id:
         raise Exception("Deployment task ID not found in response.")
         
     print(f"[INFO] Deployment initiated. Task ID: {task_id}")
+    
+    # == Step 3: Monitor Task Completion ==
     return wait_for_task_completion(header, url_prefix, task_id)
+
 
 def main():
     os.environ['NO_PROXY'] = 'cz.net.sys'
@@ -155,9 +221,6 @@ def main():
     print(f"[INFO] Found {len(target_devices)} devices matching hostnames.")
     for dev in target_devices.values():
         print(f"  - {dev['host-name']} (UUID: {dev['uuid']})")
-    
-    target_device_uuids = list(target_devices.keys())
-
 
     # 3. Choose Configuration Group
     print("\n[INFO] Fetching Configuration Groups...")
@@ -227,7 +290,7 @@ def main():
     print(f"\n[INFO] Deploying group '{selected_group_name}' with variables from '{selected_csv}'...")
     
     try:
-        deploy_config_group(header, url_prefix, selected_group_id, target_device_uuids, selected_csv)
+        deploy_config_group(header, url_prefix, selected_group_id, target_devices, selected_csv)
     except Exception as e:
         print(f"[ERROR] Failed to deploy configuration group: {e}")
 
