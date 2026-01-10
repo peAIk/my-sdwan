@@ -96,18 +96,18 @@ def deploy_config_group(header, url_prefix, config_group_id, device_uuids, csv_p
     """Deploys a config group with variables from a CSV file."""
     url = f"{url_prefix}/v1/config-group/{config_group_id}/device/deploy"
     
-    # The vManage API for CSV upload typically uses multipart/form-data
-    with open(csv_path, 'rb') as csv_file:
-        files = {
-            'file': (os.path.basename(csv_path), csv_file.read(), 'text/csv'),
-            'deviceUuids': (None, json.dumps(device_uuids), 'application/json')
-        }
-        
-        # We need a different header for multipart/form-data, without 'Content-Type'
-        deploy_header = header.copy()
-        deploy_header.pop('Content-Type', None)
+    with open(csv_path, 'r', encoding='utf-8') as f:
+        csv_content = f.read()
 
-        response = requests.post(url, headers=deploy_header, files=files, verify=False)
+    payload = {
+        "deviceUuids": device_uuids,
+        "csvData": csv_content
+    }
+
+    deploy_header = header.copy()
+    deploy_header['Content-Type'] = 'application/json'
+
+    response = requests.post(url, headers=deploy_header, data=json.dumps(payload), verify=False)
     
     response.raise_for_status()
     task_id = response.json().get('id')
