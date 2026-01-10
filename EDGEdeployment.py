@@ -94,18 +94,31 @@ def wait_for_task_completion(header, url_prefix, task_id, timeout=1200, poll_int
 
 def convert_value_type(value):
     """
-    Converts a value to string format for API submission.
+    Converts a value to the correct type for API submission.
     Handles NaN, booleans, numbers, and strings.
     """
     if pd.isna(value):
         return ""
     
-    # Convert boolean values to lowercase strings
-    if isinstance(value, bool):
-        return str(value).lower()
+    # Handle string values
+    if isinstance(value, str):
+        value_lower = value.lower().strip()
+        # Convert boolean strings to actual booleans
+        if value_lower == 'true':
+            return True
+        if value_lower == 'false':
+            return False
+        # Try to convert to number
+        try:
+            if '.' in value:
+                return float(value)
+            else:
+                return int(value)
+        except ValueError:
+            return value
     
-    # Convert all other types to string
-    return str(value).strip()
+    # Return numeric types as-is
+    return value
 
 def deploy_config_group(header, url_prefix, config_group_id, target_devices, csv_path):
     """Deploys a config group using a two-step process: upload variables, then deploy."""
@@ -153,9 +166,21 @@ def deploy_config_group(header, url_prefix, config_group_id, target_devices, csv
         variables = []
         # Convert the row to a dictionary
         device_vars_dict = device_vars_row.iloc[0].to_dict()
+        
+        # Add required device metadata fields
+        variables.append({'name': 'host_name', 'value': hostname})
+        variables.append({'name': 'site_id', 'value': device_info.get('site-id', '')})
+        variables.append({'name': 'system_ip', 'value': device_info.get('system-ip', '')})
+        
+        # Add pseudo_commit_timer with default value if not in CSV
+        if 'pseudo_commit_timer' in device_vars_dict:
+            variables.append({'name': 'pseudo_commit_timer', 'value': convert_value_type(device_vars_dict['pseudo_commit_timer'])})
+        else:
+            variables.append({'name': 'pseudo_commit_timer', 'value': 300})  # Default value
+        
+        # Add CSV variables
         for key, value in device_vars_dict.items():
-            # Only add variables that are expected by the config group schema
-            if key in expected_vars:
+            if key in expected_vars and key != 'Host Name':
                 converted_value = convert_value_type(value)
                 variables.append({'name': key, 'value': converted_value})
         
