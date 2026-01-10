@@ -56,7 +56,7 @@ def main():
     #vmanage_host = 'vman-atm.cz.net.sys'
     # BRANCHES vManage
     vmanage_host = 'vman.cz.net.sys'
-    print(f "Using vManage host: {vmanage_host}")
+    print(f"Using vManage host: {vmanage_host}")
     vmanage_port = '443'  # Default HTTPS port
     #vmanage_username = input(f"{vmanage_host}\nUsername: ")
     #vmanage_password = getpass("Password: ")
