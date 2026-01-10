@@ -105,7 +105,7 @@ def deploy_config_group(header, url_prefix, config_group_id, device_uuids, csv_p
         
         # We need a different header for multipart/form-data, without 'Content-Type'
         deploy_header = header.copy()
-        del deploy_header['Content-Type']
+        deploy_header.pop('Content-Type', None)
 
         response = requests.post(url, headers=deploy_header, files=files, verify=False)
     
