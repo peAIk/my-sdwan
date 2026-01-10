@@ -92,6 +92,26 @@ def wait_for_task_completion(header, url_prefix, task_id, timeout=1200, poll_int
     print(f"[ERROR] Task timed out after {timeout} seconds.")
     return False
 
+def convert_value_type(value):
+    """
+    Intelligently converts a value to the correct type (integer, boolean, or string).
+    Pandas might read values as native types, but this handles strings from CSV correctly.
+    """
+    if pd.isna(value):
+        return "" # Or handle as you see fit, e.g., return None
+        
+    if isinstance(value, str):
+        # Check for boolean strings
+        if value.lower() == 'true':
+            return True
+        if value.lower() == 'false':
+            return False
+        # Check for integer strings
+        if value.isdigit():
+            return int(value)
+    # If it's already a number (int, float) or a non-convertible string, return as is.
+    return value
+
 def deploy_config_group(header, url_prefix, config_group_id, target_devices, csv_path):
     """Deploys a config group using a two-step process: upload variables, then deploy."""
     
@@ -136,7 +156,8 @@ def deploy_config_group(header, url_prefix, config_group_id, target_devices, csv
         for key, value in device_vars_dict.items():
             # Only add variables that are expected by the config group schema
             if key in expected_vars:
-                variables.append({'name': key, 'value': value})
+                converted_value = convert_value_type(value)
+                variables.append({'name': key, 'value': converted_value})
         
         devices_payload.append({
             'device-id': uuid,
@@ -156,7 +177,7 @@ def deploy_config_group(header, url_prefix, config_group_id, target_devices, csv
     upload_url = f"{url_prefix}/v1/config-group/{config_group_id}/device/variables"
     
     print("[INFO] Uploading variables payload...")
-    upload_response = requests.put(upload_url, headers=upload_header, data=json.dumps(variables_payload), verify=False)
+    upload_response = requests.put(upload_url, headers=upload_header, data=json.dumps(variables_payload, indent=2), verify=False)
     upload_response.raise_for_status()
     print("[INFO] Variable upload successful.")
 
@@ -181,8 +202,6 @@ def deploy_config_group(header, url_prefix, config_group_id, target_devices, csv
     
     # == Step 3: Monitor Task Completion ==
     return wait_for_task_completion(header, url_prefix, task_id)
-
-
 def main():
     os.environ['NO_PROXY'] = 'cz.net.sys'
     vmanage_host = 'vman.cz.net.sys'
