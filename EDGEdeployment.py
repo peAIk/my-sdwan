@@ -169,7 +169,15 @@ def deploy_config_group(header, url_prefix, config_group_id, target_devices, csv
         
         # Add required device metadata fields
         variables.append({'name': 'host_name', 'value': hostname})
-        variables.append({'name': 'site_id', 'value': device_info.get('site-id', '')})
+        
+        # Convert site_id to integer
+        site_id_value = device_info.get('site-id', 0)
+        try:
+            site_id_value = int(site_id_value)
+        except (ValueError, TypeError):
+            site_id_value = 0
+        variables.append({'name': 'site_id', 'value': site_id_value})
+        
         variables.append({'name': 'system_ip', 'value': device_info.get('system-ip', '')})
         
         # Add pseudo_commit_timer with default value if not in CSV
