@@ -5,7 +5,7 @@ import csv
 from getpass import getpass
 import glob
 import time
-import pandas as pd
+import pandas as pd 
 requests.packages.urllib3.disable_warnings()
 
 class Authentication:
@@ -94,23 +94,18 @@ def wait_for_task_completion(header, url_prefix, task_id, timeout=1200, poll_int
 
 def convert_value_type(value):
     """
-    Intelligently converts a value to the correct type (integer, boolean, or string).
-    Pandas might read values as native types, but this handles strings from CSV correctly.
+    Converts a value to string format for API submission.
+    Handles NaN, booleans, numbers, and strings.
     """
     if pd.isna(value):
-        return "" # Or handle as you see fit, e.g., return None
-        
-    if isinstance(value, str):
-        # Check for boolean strings
-        if value.lower() == 'true':
-            return True
-        if value.lower() == 'false':
-            return False
-        # Check for integer strings
-        if value.isdigit():
-            return int(value)
-    # If it's already a number (int, float) or a non-convertible string, return as is.
-    return value
+        return ""
+    
+    # Convert boolean values to lowercase strings
+    if isinstance(value, bool):
+        return str(value).lower()
+    
+    # Convert all other types to string
+    return str(value).strip()
 
 def deploy_config_group(header, url_prefix, config_group_id, target_devices, csv_path):
     """Deploys a config group using a two-step process: upload variables, then deploy."""
@@ -129,6 +124,11 @@ def deploy_config_group(header, url_prefix, config_group_id, target_devices, csv
              raise Exception("Could not retrieve variable schema. Is at least one device associated with the group?")
         expected_vars = {var['name'] for var in schema_data['devices'][0]['variables']}
         print(f"[INFO] Found {len(expected_vars)} expected variables in config group schema.")
+    except requests.exceptions.RequestException as e:
+        print(f"[ERROR] Schema request failed: {e}")
+        if hasattr(e.response, 'text'):
+            print(f"[ERROR] Response body: {e.response.text}")
+        raise Exception(f"Failed to get variable schema: {e}")
     except Exception as e:
         raise Exception(f"Failed to get variable schema: {e}")
 
@@ -177,7 +177,12 @@ def deploy_config_group(header, url_prefix, config_group_id, target_devices, csv
     upload_url = f"{url_prefix}/v1/config-group/{config_group_id}/device/variables"
     
     print("[INFO] Uploading variables payload...")
-    upload_response = requests.put(upload_url, headers=upload_header, data=json.dumps(variables_payload, indent=2), verify=False)
+    print(f"[DEBUG] Sample payload for first device: {json.dumps(devices_payload[0], indent=2)}")
+    upload_response = requests.put(upload_url, headers=upload_header, data=json.dumps(variables_payload), verify=False)
+    
+    if upload_response.status_code != 200:
+        print(f"[ERROR] Upload response status: {upload_response.status_code}")
+        print(f"[ERROR] Upload response body: {upload_response.text}")
     upload_response.raise_for_status()
     print("[INFO] Variable upload successful.")
 
@@ -192,6 +197,10 @@ def deploy_config_group(header, url_prefix, config_group_id, target_devices, csv
     deploy_header['Content-Type'] = 'application/json'
 
     deploy_response = requests.post(deploy_url, headers=deploy_header, json=deploy_payload, verify=False)
+    
+    if deploy_response.status_code not in [200, 201, 202]:
+        print(f"[ERROR] Deploy response status: {deploy_response.status_code}")
+        print(f"[ERROR] Deploy response body: {deploy_response.text}")
     deploy_response.raise_for_status()
 
     task_id = deploy_response.json().get('id')
